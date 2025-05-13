@@ -1,0 +1,199 @@
+import React, { useEffect, useState, useRef } from 'react';
+import { X, Image, Tag } from 'lucide-react';
+import { Note } from '../types';
+import { useNotes } from '../context/NotesContext';
+import LabelPill from './LabelPill';
+
+interface NoteEditorProps {
+  note?: Note;
+  onClose: () => void;
+  onLabelsClick: () => void;
+}
+
+const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick }) => {
+  const { addNote, updateNote } = useNotes();
+
+  const [title, setTitle] = useState(note?.title || '');
+  const [content, setContent] = useState(note?.content || '');
+  const [images, setImages] = useState<string[]>(note?.images || []);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>(note?.labels || []);
+  const [currentNote, setCurrentNote] = useState<Note | undefined>(note);
+
+  const saveTimeoutRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const lastSavedRef = useRef({
+    title,
+    content,
+    images,
+    labels: selectedLabels,
+  });
+
+  // Auto-save logic
+  useEffect(() => {
+    if (
+      title.trim() === '' &&
+      content.trim() === '' &&
+      images.length === 0 &&
+      selectedLabels.length === 0
+    )
+      return;
+
+    const hasChanged =
+      title !== lastSavedRef.current.title ||
+      content !== lastSavedRef.current.content ||
+      images.join() !== lastSavedRef.current.images.join() ||
+      selectedLabels.join() !== lastSavedRef.current.labels.join();
+
+    if (!hasChanged) return;
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+    saveTimeoutRef.current = window.setTimeout(() => {
+      if (currentNote?.id) {
+        updateNote(currentNote.id, {
+          title,
+          content,
+          images,
+          labels: selectedLabels,
+        });
+      } else {
+        const newNote = addNote({
+          title,
+          content,
+          images,
+          labels: selectedLabels,
+        });
+        setCurrentNote(newNote); // now track this as the note being edited
+      }
+
+      lastSavedRef.current = {
+        title,
+        content,
+        images,
+        labels: selectedLabels,
+      };
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [title, content, images, selectedLabels, addNote, updateNote, currentNote]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setImages((prev) => [...prev, e.target!.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeLabel = (labelId: string) => {
+    setSelectedLabels((prev) => prev.filter((id) => id !== labelId));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
+        <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
+            {note ? 'Edit Note' : 'New Note'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="p-4 overflow-y-auto flex-grow">
+          <input
+            type="text"
+            placeholder="Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full p-2 text-xl font-medium border-b mb-4 focus:outline-none focus:border-purple-500 dark:border-gray-700 bg-transparent text-gray-900 dark:text-white"
+          />
+
+          <textarea
+            placeholder="Start typing..."
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full p-2 min-h-[200px] focus:outline-none resize-none bg-transparent text-gray-800 dark:text-gray-200"
+          />
+
+          {images.length > 0 && (
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {images.map((src, index) => (
+                <div key={index} className="relative rounded overflow-hidden h-24">
+                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <button
+                    onClick={() => removeImage(index)}
+                    className="absolute top-1 right-1 bg-black bg-opacity-50 rounded-full p-1 text-white"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {selectedLabels.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {selectedLabels.map((labelId) => (
+                <LabelPill
+                  key={labelId}
+                  labelId={labelId}
+                  showRemove
+                  onRemove={() => removeLabel(labelId)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t dark:border-gray-700 flex justify-between items-center">
+          <div className="flex space-x-2">
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+            >
+              <Image size={20} />
+            </button>
+            <button
+              onClick={onLabelsClick}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+            >
+              <Tag size={20} />
+            </button>
+          </div>
+          <span className="text-sm text-gray-500 dark:text-gray-400">Auto-saving...</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default NoteEditor;
