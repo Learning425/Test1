@@ -1,8 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { X, Image, Tag } from 'lucide-react';
+import { X, Image, Tag, Lock, LockOpen, Share2 } from 'lucide-react';
 import { Note } from '../types';
 import { useNotes } from '../context/NotesContext';
 import LabelPill from './LabelPill';
+import PasswordDialog from './PasswordDialog';
+import ShareDialog from './ShareDialog';
+import bcrypt from 'bcryptjs';
 
 interface NoteEditorProps {
   note?: Note;
@@ -18,6 +21,11 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
   const [images, setImages] = useState<string[]>(note?.images || []);
   const [selectedLabels, setSelectedLabels] = useState<string[]>(note?.labels || []);
   const [currentNote, setCurrentNote] = useState<Note | undefined>(note);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
+  const [isPasswordProtected, setIsPasswordProtected] = useState(note?.isPasswordProtected || false);
+  const [isLocked, setIsLocked] = useState(note?.isPasswordProtected || false);
 
   const saveTimeoutRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -29,8 +37,68 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
     labels: selectedLabels,
   });
 
+  useEffect(() => {
+    if (note?.isPasswordProtected && !note?.passwordHash) {
+      setShowPasswordDialog(true);
+      setIsSettingPassword(true);
+    }
+  }, [note]);
+
+  const handlePasswordSubmit = async (password: string) => {
+    if (isSettingPassword) {
+      const salt = await bcrypt.genSalt(10);
+      const hash = await bcrypt.hash(password, salt);
+      
+      if (currentNote?.id) {
+        updateNote(currentNote.id, {
+          ...currentNote,
+          isPasswordProtected: true,
+          passwordHash: hash,
+        });
+      }
+      setIsPasswordProtected(true);
+    } else {
+      const isValid = await bcrypt.compare(password, currentNote?.passwordHash || '');
+      if (isValid) {
+        setIsLocked(false);
+      } else {
+        // Handle invalid password
+        return;
+      }
+    }
+    setShowPasswordDialog(false);
+  };
+
+  const handleShare = async (emails: string[], canEdit: boolean) => {
+    if (currentNote?.id) {
+      const sharedWith = emails.map(email => ({
+        email,
+        canEdit,
+        sharedAt: Date.now(),
+      }));
+      
+      updateNote(currentNote.id, {
+        ...currentNote,
+        sharedWith,
+      });
+    }
+    setShowShareDialog(false);
+  };
+
+  const handleRemoveShare = (email: string) => {
+    if (currentNote?.id && currentNote.sharedWith) {
+      const updatedShares = currentNote.sharedWith.filter(share => share.email !== email);
+      updateNote(currentNote.id, {
+        ...currentNote,
+        sharedWith: updatedShares,
+      });
+    }
+  };
+
   // Auto-save logic
   useEffect(() => {
+    if (isLocked) return;
+
     if (
       title.trim() === '' &&
       content.trim() === '' &&
@@ -64,7 +132,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
           images,
           labels: selectedLabels,
         });
-        setCurrentNote(newNote); // now track this as the note being edited
+        setCurrentNote(newNote);
       }
 
       lastSavedRef.current = {
@@ -78,7 +146,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [title, content, images, selectedLabels, addNote, updateNote, currentNote]);
+  }, [title, content, images, selectedLabels, addNote, updateNote, currentNote, isLocked]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -104,6 +172,34 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
   const removeLabel = (labelId: string) => {
     setSelectedLabels((prev) => prev.filter((id) => id !== labelId));
   };
+
+  const togglePasswordProtection = () => {
+    if (isPasswordProtected) {
+      if (currentNote?.id) {
+        updateNote(currentNote.id, {
+          ...currentNote,
+          isPasswordProtected: false,
+          passwordHash: undefined,
+        });
+      }
+      setIsPasswordProtected(false);
+    } else {
+      setIsSettingPassword(true);
+      setShowPasswordDialog(true);
+    }
+  };
+
+  if (isLocked) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-4">
+        <PasswordDialog
+          title="Enter Password"
+          onSubmit={handlePasswordSubmit}
+          onCancel={onClose}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-4">
@@ -188,10 +284,40 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
             >
               <Tag size={20} />
             </button>
+            <button
+              onClick={togglePasswordProtection}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+            >
+              {isPasswordProtected ? <Lock size={20} /> : <LockOpen size={20} />}
+            </button>
+            <button
+              onClick={() => setShowShareDialog(true)}
+              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+            >
+              <Share2 size={20} />
+            </button>
           </div>
           <span className="text-sm text-gray-500 dark:text-gray-400">Auto-saving...</span>
         </div>
       </div>
+
+      {showPasswordDialog && (
+        <PasswordDialog
+          title={isSettingPassword ? 'Set Password' : 'Enter Password'}
+          onSubmit={handlePasswordSubmit}
+          onCancel={() => setShowPasswordDialog(false)}
+          isSettingPassword={isSettingPassword}
+        />
+      )}
+
+      {showShareDialog && (
+        <ShareDialog
+          onShare={handleShare}
+          onClose={() => setShowShareDialog(false)}
+          existingShares={currentNote?.sharedWith}
+          onRemoveShare={handleRemoveShare}
+        />
+      )}
     </div>
   );
 };
