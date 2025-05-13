@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { X, Image, Tag, Lock, Lock as LockOpen, Share2 } from 'lucide-react';
+import { X, Image, Tag, Lock, Lock as LockOpen, Share2, Users } from 'lucide-react';
 import { Note } from '../types';
 import { useNotes } from '../context/NotesContext';
 import LabelPill from './LabelPill';
 import PasswordDialog from './PasswordDialog';
 import ShareDialog from './ShareDialog';
+import { websocketService } from '../services/websocket';
 import bcrypt from 'bcryptjs';
 
 interface NoteEditorProps {
@@ -26,6 +27,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
   const [isSettingPassword, setIsSettingPassword] = useState(false);
   const [isPasswordProtected, setIsPasswordProtected] = useState(note?.isPasswordProtected || false);
   const [isLocked, setIsLocked] = useState(note?.isPasswordProtected || false);
+  const [activeCollaborators, setActiveCollaborators] = useState<string[]>([]);
 
   const saveTimeoutRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,6 +38,24 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
     images,
     labels: selectedLabels,
   });
+
+  // WebSocket connection
+  useEffect(() => {
+    if (currentNote?.id && currentNote.sharedWith && currentNote.sharedWith.length > 0) {
+      websocketService.connect(currentNote.id);
+
+      websocketService.onNoteUpdate((update) => {
+        if (update.title !== undefined) setTitle(update.title);
+        if (update.content !== undefined) setContent(update.content);
+        if (update.images !== undefined) setImages(update.images);
+        if (update.labels !== undefined) setSelectedLabels(update.labels);
+      });
+
+      return () => {
+        websocketService.disconnect();
+      };
+    }
+  }, [currentNote?.id, currentNote?.sharedWith]);
 
   useEffect(() => {
     if (note?.isPasswordProtected && !note?.passwordHash) {
@@ -95,7 +115,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
     }
   };
 
-  // Auto-save logic
+  // Auto-save logic with WebSocket sync
   useEffect(() => {
     if (isLocked) return;
 
@@ -118,29 +138,22 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
     saveTimeoutRef.current = window.setTimeout(() => {
-      if (currentNote?.id) {
-        updateNote(currentNote.id, {
-          title,
-          content,
-          images,
-          labels: selectedLabels,
-        });
-      } else {
-        const newNote = addNote({
-          title,
-          content,
-          images,
-          labels: selectedLabels,
-        });
-        setCurrentNote(newNote);
-      }
-
-      lastSavedRef.current = {
+      const updates = {
         title,
         content,
         images,
         labels: selectedLabels,
       };
+
+      if (currentNote?.id) {
+        updateNote(currentNote.id, updates);
+        websocketService.emitNoteUpdate(updates);
+      } else {
+        const newNote = addNote(updates);
+        setCurrentNote(newNote);
+      }
+
+      lastSavedRef.current = updates;
     }, 500);
 
     return () => {
@@ -205,9 +218,19 @@ const NoteEditor: React.FC<NoteEditorProps> = ({ note, onClose, onLabelsClick })
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
         <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-            {note ? 'Edit Note' : 'New Note'}
-          </h2>
+          <div className="flex items-center">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-white">
+              {note ? 'Edit Note' : 'New Note'}
+            </h2>
+            {activeCollaborators.length > 0 && (
+              <div className="ml-4 flex items-center">
+                <Users size={16} className="text-blue-500 mr-2" />
+                <span className="text-sm text-gray-500">
+                  {activeCollaborators.length} active
+                </span>
+              </div>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
