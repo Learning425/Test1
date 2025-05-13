@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { X, Image, Tag, Lock, LockOpen, Share2 } from 'lucide-react';
+import { X, Image, Tag, Lock, Lock as LockOpen, Share2 } from 'lucide-react';
 import { Note } from '../types';
 import { useNotes } from '../context/NotesContext';
 import LabelPill from './LabelPill';
