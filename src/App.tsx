@@ -1,18 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { NotesProvider } from './context/NotesContext';
 import Header from './components/Header';
 import NoteList from './components/NoteList';
 import NoteEditor from './components/NoteEditor';
 import LabelManager from './components/LabelManager';
 import FilterLabels from './components/FilterLabels';
+import LoginForm from './components/Auth/LoginForm';
+import SignUpForm from './components/Auth/SignUpForm';
 import { Note } from './types';
 import AnimatedTransition from './components/AnimatedTransition';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 function App() {
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [showLabelManager, setShowLabelManager] = useState(false);
   const [labelManagerMode, setLabelManagerMode] = useState<'manage' | 'select'>('manage');
+  const [session, setSession] = useState<any>(null);
+  const [showSignUp, setShowSignUp] = useState(false);
+
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleNewNote = () => {
     setActiveNote(null);
@@ -48,6 +74,10 @@ function App() {
     }
     // For new notes, the labels will be applied in the editor
   };
+
+  if (!session) {
+    return showSignUp ? <SignUpForm /> : <LoginForm />;
+  }
 
   return (
     <NotesProvider>
