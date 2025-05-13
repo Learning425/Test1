@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pin, PinOff, Trash2 } from 'lucide-react';
+import { Pin, PinOff, Trash2, Lock, Share2 } from 'lucide-react';
 import { Note } from '../types';
 import { truncateText, formatDate, stripHtml } from '../utils/helpers';
 import LabelPill from './LabelPill';
@@ -19,7 +19,36 @@ const NoteItem: React.FC<NoteItemProps> = ({
   onPinToggle,
   onDelete,
 }) => {
-  const { id, title, content, images, isPinned, updatedAt, labels } = note;
+  const { id, title, content, images, isPinned, updatedAt, labels, isPasswordProtected, sharedWith } = note;
+
+  const renderStatusIcons = () => (
+    <div className="flex items-center space-x-1">
+      {isPasswordProtected && (
+        <Lock size={16} className="text-purple-500" />
+      )}
+      {sharedWith && sharedWith.length > 0 && (
+        <Share2 size={16} className="text-blue-500" />
+      )}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onPinToggle(id);
+        }}
+        className="text-gray-400 hover:text-yellow-500 transition-colors"
+      >
+        {isPinned ? <Pin size={18} className="text-yellow-500" /> : <PinOff size={18} />}
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(id);
+        }}
+        className="text-gray-400 hover:text-red-500 transition-colors"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
 
   // Grid view
   if (isGrid) {
@@ -44,15 +73,7 @@ const NoteItem: React.FC<NoteItemProps> = ({
             <h3 className="text-lg font-medium text-gray-900 dark:text-white truncate">
               {title || 'Untitled'}
             </h3>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPinToggle(id);
-              }}
-              className="ml-2 flex-shrink-0 text-gray-400 hover:text-yellow-500 transition-colors"
-            >
-              {isPinned ? <Pin size={18} className="text-yellow-500" /> : <PinOff size={18} />}
-            </button>
+            {renderStatusIcons()}
           </div>
 
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-3">
@@ -73,17 +94,8 @@ const NoteItem: React.FC<NoteItemProps> = ({
           )}
         </div>
 
-        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-750 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-750 text-xs text-gray-500 dark:text-gray-400">
           <span>{formatDate(updatedAt)}</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(id);
-            }}
-            className="text-gray-400 hover:text-red-500 transition-colors"
-          >
-            <Trash2 size={16} />
-          </button>
         </div>
       </div>
     );
@@ -105,24 +117,7 @@ const NoteItem: React.FC<NoteItemProps> = ({
               <span className="text-xs text-gray-500 dark:text-gray-400 mr-2">
                 {formatDate(updatedAt)}
               </span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPinToggle(id);
-                }}
-                className="mr-2 text-gray-400 hover:text-yellow-500 transition-colors"
-              >
-                {isPinned ? <Pin size={18} className="text-yellow-500" /> : <PinOff size={18} />}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(id);
-                }}
-                className="text-gray-400 hover:text-red-500 transition-colors"
-              >
-                <Trash2 size={16} />
-              </button>
+              {renderStatusIcons()}
             </div>
           </div>
 

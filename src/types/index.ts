@@ -8,6 +8,17 @@ export interface Note {
   isPinned: boolean;
   pinnedAt?: number;
   labels: string[];
+  isPasswordProtected?: boolean;
+  passwordHash?: string;
+  sharedWith?: SharedUser[];
+  ownerId?: string;
+  readOnly?: boolean;
+}
+
+export interface SharedUser {
+  email: string;
+  canEdit: boolean;
+  sharedAt: number;
 }
 
 export interface Label {
