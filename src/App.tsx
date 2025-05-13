@@ -67,16 +67,16 @@ function App() {
 
   const handleLabelSelection = (labelIds: string[]) => {
     if (activeNote) {
-      // For editing existing note
-      // Note: This doesn't actually modify the note since the editor component
-      // is handling updates, but we update the local state for consistency
       setActiveNote({ ...activeNote, labels: labelIds });
     }
-    // For new notes, the labels will be applied in the editor
   };
 
   if (!session) {
-    return showSignUp ? <SignUpForm /> : <LoginForm />;
+    return showSignUp ? (
+      <SignUpForm onShowLogin={() => setShowSignUp(false)} />
+    ) : (
+      <LoginForm onShowSignUp={() => setShowSignUp(true)} />
+    );
   }
 
   return (
@@ -89,7 +89,6 @@ function App() {
           <NoteList onNoteClick={handleEditNote} />
         </main>
         
-        {/* Note Editor */}
         {(isCreatingNote || activeNote) && (
           <AnimatedTransition show={true}>
             <NoteEditor
@@ -100,7 +99,6 @@ function App() {
           </AnimatedTransition>
         )}
         
-        {/* Label Manager */}
         {showLabelManager && (
           <AnimatedTransition show={true}>
             <LabelManager

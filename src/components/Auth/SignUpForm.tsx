@@ -7,7 +7,11 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-const SignUpForm: React.FC = () => {
+interface SignUpFormProps {
+  onShowLogin: () => void;
+}
+
+const SignUpForm: React.FC<SignUpFormProps> = ({ onShowLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -132,7 +136,7 @@ const SignUpForm: React.FC = () => {
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Already have an account?{' '}
             <button
-              onClick={() => {/* Handle navigation to login */}}
+              onClick={onShowLogin}
               className="font-medium text-purple-600 hover:text-purple-500"
             >
               Sign in
