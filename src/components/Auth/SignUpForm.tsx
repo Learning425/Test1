@@ -24,30 +24,38 @@ const SignUpForm: React.FC<SignUpFormProps> = ({ onShowLogin }) => {
     setLoading(true);
 
     try {
-      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+      // 1. Sign up the user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
       });
 
       if (signUpError) throw signUpError;
 
-      if (user) {
-        // Create user profile
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .insert([
-            {
-              id: user.id,
-              username,
-              theme_preference: 'light',
-            },
-          ]);
-
-        if (profileError) throw profileError;
+      if (!authData.user) {
+        throw new Error('No user data returned after signup');
       }
+
+      // 2. Create user profile
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .insert([
+          {
+            id: authData.user.id,
+            username,
+            email_verified: false,
+            theme_preference: 'light',
+          },
+        ]);
+
+      if (profileError) {
+        // If profile creation fails, clean up the auth user
+        await supabase.auth.signOut();
+        throw profileError;
+      }
+
     } catch (err: any) {
       setError(err.message || 'An error occurred during sign up');
-    } finally {
       setLoading(false);
     }
   };
